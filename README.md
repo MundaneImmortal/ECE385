@@ -22,7 +22,7 @@ Due to the restriction of 3.88Mbits on-chip-memory and 2MB SRAM memory, we only 
 
 It contains the whole project, in which the top-level file is lab8.sv and all other ".sv" files are in the folder "FILES". The block diagrams are shown below:
 
-Top-Level:![Screen Shot 2022-01-16 at 6.27.50 AM](ZombieCrisis3/Screen Shot 2022-01-16 at 6.27.50 AM.png)Visualization:![Screen Shot 2022-01-16 at 6.27.50 AM](ZombieCrisis3/Screen Shot 2022-01-16 at 6.27.58 AM.png)Game logic:![Screen Shot 2022-01-16 at 6.28.05 AM](ZombieCrisis3/Screen Shot 2022-01-16 at 6.28.05 AM.png)
+Top-Level:![image](toplevel.png)Visualization:![image](visualization.png)Game logic:![image](game_logic.png)
 
 
 
