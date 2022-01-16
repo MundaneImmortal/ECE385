@@ -1,0 +1,201 @@
+module frame_drawer(
+    input logic         Clk, Reset,
+    input logic         Ready, // if game judgement completed
+    input logic         frame_clk, // 60Hz V-SYNC signal
+    
+    input logic [1:0]   Player_Direction[2],
+    input logic [4:0]   Player_Control[2],
+    input logic [10:0]  Player_X[2],
+                        Player_Y[2],
+    input logic         Player_State[2],
+    input logic [6:0]   Player_HP[2],
+    // output logic        Player_Id,
+
+    // control signal for SRAM
+    input logic [15:0]  Data_Read,
+    output logic        SRAM_Read,
+    output logic [110:0] SRAM_Addr,
+    
+    // control signal for frame_buffer
+    output logic        frame,
+    output logic        FB_Write,
+    output logic [10:0]  FB_AddrX,
+                        FB_AddrY,
+    output logic [4:0]  ColorId
+    
+);
+    enum logic [2:0] {
+
+        Background,
+        Wait_Judgement,
+        //Object Render
+        Player_Render,
+        Barrel_Render,
+        Block_Render,
+        Grenade_Render,
+        Fireball_Render,
+        Zombie_Render,
+        Devil_Render,
+        //Effects Render
+
+        //Change frame
+        Idle
+    } State, Next_State;
+    
+    // Detect rising edge of frame_clk
+    logic frame_clk_delayed, frame_clk_rising_edge;
+    always_ff @ (posedge Clk) begin
+        frame_clk_delayed <= frame_clk;
+        frame_clk_rising_edge <= (frame_clk == 1'b1) && (frame_clk_delayed == 1'b0);
+    end
+    
+
+    logic [9:0] h_counter, v_counter, h_counter_in, v_counter_in; //max 1024
+    logic frame_in;
+    logic wait_sram, wait_sram_in;
+    logic FB_Write_in;
+    logic [8:0] FB_AddrX_in, FB_AddrY_in;
+    logic [4:0] ColorId_in;
+    logic Player_Id_in;
+    logic        Player_Id
+
+    // update registers
+    always_ff @ (posedge Clk)
+    begin
+        if (Reset)
+        begin
+            State <= Background;
+            wait_sram <= 1'b0;
+            frame <= 1'b0;
+            FB_Write <= 1'b0;
+            FB_AddrX <= 10'd0;
+            FB_AddrY <= 10'd0;
+            h_counter <= 10'b0;
+            v_counter <= 10'b0;
+            ColorId <= 5'd10;
+            Player_Id <= 1'b0;
+        end
+        else
+        begin
+            State <= Next_State;
+            wait_sram <= wait_sram_in;
+            frame <= frame_in;
+            FB_Write <= FB_Write_in;
+            FB_AddrX <= FB_AddrX_in;
+            FB_AddrY <= FB_AddrY_in;
+            h_counter <= h_counter_in;
+            v_counter <= v_counter_in;
+            ColorId <= ColorId_in;
+            Player_Id <= Player_Id_in;
+        end
+    end
+
+    always_comb
+    begin
+        Next_State = State;
+
+        SRAM_Read = 1'b0;
+        SRAM_Addr = 20'b0;
+
+        wait_sram_in = 1'b0;
+        frame_in = frame;
+        FB_Write_in = 1'b0;
+        FB_AddrX_in = FB_AddrX;
+        FB_AddrY_in = FB_AddrY;
+
+        h_counter_in = h_counter;
+        v_counter_in = v_counter;
+
+        ColorId_in = 5'd0;
+
+        Player_Id_in = Player_Id;
+
+        unique case (State)
+            // Render the background (Black and grey)
+            Background:
+            begin
+                FB_Write_in = 1'b1;
+                FB_AddrX_in = h_counter;
+                FB_AddrY_in = v_counter;
+                if(h_counter >= 10'd0 && h_counter < 10'd640 && v_counter >= 10'd0 && v_counter < 10'd480)
+                    ColorId_in = 5'd22;
+                else
+                    ColorId_in = 5'd21;
+
+                h_counter_in = h_counter + 10'd1;
+                if(h_counter_in == 10'd640)
+                begin
+                    h_counter_in = 10'd0;
+                    v_counter_in = v_counter + 10'd1;
+                    if(v_counter_in == 10'd480)
+                    begin
+                        v_counter_in = 10'd0;
+                        Next_State = Wait_Judgement;
+                    end
+                end
+            end
+
+            Wait_Judgement:
+            begin
+                if(Ready)
+                    Next_State = Player_Render;
+            end
+
+            // Render Players 
+            Player_Render:
+            begin
+                SRAM_Read = 1'b1;
+                SRAM_Addr = (Player_Id << 13) + (((Player_Direction[Player_Id] << 1) + Player_State[Player_Id]) << 10) + (v_counter << 5) + h_counter ; 
+                // Use two clk intervals to wait for the data in SRAM
+                wait_sram_in = ~wait_sram;
+                if(wait_sram)
+                    begin
+                    FB_AddrX_in = Player_X[Player_Id] + h_counter;
+                    FB_AddrY_in = Player_Y[Player_Id] + v_counter;
+                    //Image visualization
+                    ColorId_in = Data_Read[4:0];
+                    //HP visualization (不同维度的数量比较？)
+                    if( (((Player_HP[Player_Id] >> 3)+ 7'd8) > h_counter[6:0]) && (h_counter > 10'd8)  && ((v_counter >> 1) == 10'd0 ))
+                        begin
+                            ColorId_in = 5'd24;
+                        end
+                    FB_Write_in = 1'b1;
+                    // set white color on Player as transparent
+                    if(ColorId_in == 5'd18)
+                        begin
+                            FB_Write_in = 1'b0;
+                        end
+                    //Loop through 32*32
+                    h_counter_in = h_counter + 10'd1;
+                    if(h_counter_in == 10'd32)
+                        begin
+                            h_counter_in = 10'd0;
+                            v_counter_in = v_counter + 10'd1;
+                            if(v_counter_in == 10'd32)
+                            begin
+                                v_counter_in = 10'd0;
+                                //Loop through two players
+                                Player_Id_in = Player_Id + 1'd1;
+                                if(Player_Id == 1'd1)
+                                begin
+                                    Player_Id_in = 1'd0;
+                                    Next_State = Idle;
+                                end
+                            end
+                        end
+                end
+            end
+            Idle:
+            begin
+                if(frame_clk_rising_edge)
+                begin
+                    Next_State = Background;
+                    frame_in = ~frame;
+                end
+            end
+
+            default: ;
+        endcase
+    end
+
+endmodule

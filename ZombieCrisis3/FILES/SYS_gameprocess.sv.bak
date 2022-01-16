@@ -1,0 +1,153 @@
+
+module Timeflow(
+    input logic Clk, Reset, 
+    input logic frame_clk,
+    //control signal
+    input logic Start,
+    input logic [99:0] Zombie_Exist,
+    input logic [6:0] Player_HP[2],
+    output logic Generate[2],
+    output logic Success,
+    output logic Fail
+);
+
+    parameter [9:0] Zombie_Base = 10'd50;
+    parameter [9:0] Devil_Base = 10'd2;
+    parameter [9:0] Interval_Time = 10'd600;
+    parameter [9:0] Generate_Time = 10'd30;
+
+    logic [9:0] Zombie_Counter;
+    logic [9:0] Devil_Counter;
+    logic [9:0] Zombie_Num;
+    logic [9:0] Devil_Num;
+    logic [9:0] Interval_Counter;
+    logic [2:0] Level;
+
+    logic [9:0] Zombie_Counter_in;
+    logic [9:0] Devil_Counter_in;
+    logic [9:0] Zombie_Num_in;
+    logic [9:0] Devil_Num_in;
+    logic [9:0] Interval_Counter_in;
+    logic [2:0] Level_in;
+    logic Zombie_Finish,Devil_Finish;
+
+    int level;
+    int zombie_base = 50;
+    assign level = Level;
+
+    enum logic{
+        Playing,
+        Interval
+    }State, Next_State;
+
+    always_ff @( posedge frame_clk ) begin 
+        if(Start) //We control the start with Reset
+        begin
+            Zombie_Counter <= Zombie_Counter_in;
+            Devil_Counter <= Devil_Counter_in;
+            Zombie_Num <= Zombue_Num_in;
+            Devil_Num <= Devil_Num_in;
+            Interval_Counter <= Interval_Counter_in;
+            Level <= Level_in;
+            State <= Next_State;
+        end
+        else 
+        begin
+            Zombie_Counter <= 10'd0;
+            Devil_Counter <= 10'd0;
+            Zombie_Num <= 10'd0;
+            Devil_Num <= 10'd0;
+            Interval_Counter <= 10'd0;
+            Level <= 10'd0;
+            State <= 1'b0;
+        end
+    end
+
+    always_comb begin 
+        Next_State = State;
+        Zombie_Counter_in = Zombie_Counter;
+        Devil_Counter_in = Devil_Counter;
+        Interval_Counter_in = Interval_Counter;
+        Zombie_Num_in = Zombie_Num;
+        Devil_Num_in = Devil_Num;
+        Level_in = Level;
+        Zombie_Finish = 1'b0;
+        Devil_Finish = 1'b0;
+        unique case(State)
+
+            Playing:
+            begin
+                if(Player_HP[0] | Plyaer_HP[1] == 7'b0)
+                    Fail = 1'b1;
+                else begin
+                    if(Zombie_Num == level * zombie_base)
+                    begin
+                        Zombie_Finish = 1'b1;
+                        Next_State = Interval;
+                    end
+                    else
+                    begin
+                        Zombie_Counter_in = Zombie_Counter + 10'd1;
+                        if(Zombie_Counter == Generate_Time)
+                        begin
+                            if( Zombie_Exist == {100{1'b1}})
+                            begin
+                                Zombie_Counter_in = Generate_Time;
+                            end
+                            else begin
+                                Generate[0] = 1'b1;
+                                Zombie_Num_in = Zombie_Num + 10'd1;
+                                Zombie_Counter_in = 10'd0;
+                            end
+                        end
+                    end
+
+                    // if(Devil_Num == Level * Devil_Base)
+                    // begin
+                    //     Devil_Finish = 1'b1;
+                    // end
+                    // else
+                    // begin
+                    //     Devil_Counter_in = Devil_Counter + 10'd1;
+                    //     if(Devil_Counter == (Generate_Time * 16))
+                    //     begin
+                    //         if(Devil_Exist == {10{1'b1}})
+                    //         begin
+                    //             Devil_Counter_in = (Generate_Time * 16);
+                    //         end
+                    //         else begin
+                    //             Generate[1] = 1'b1;
+                    //             Devil_Num_in = Devil_Num + 10'd1;
+                    //             Devil_Counter_in = 10'd0;
+                    //         end
+                    //     end
+                    // end
+                    
+                    // if(Devil_Finish == 1'b1 && Zombie_Finish == 1'b1)
+                    // begin
+                    //     Next_State = Interval;
+                    // end
+                end
+            end
+
+            Interval:
+            begin
+                
+                Interval_counter_in = Interval_Counter + 10'd1;
+                if(Interval_Counter == Interval_Time)
+                begin
+                    Interval_Counter_in = 10'd0;
+                    Level_in = Level + 3'd1;
+                    Devil_Num_in = 10'd0;
+                    Zombie_Num_in = 10'd0;
+                    Next_State = Playing;
+                    if(Level == 3'd4)
+                    begin
+                        Success = 1'b1;
+                    end
+                end
+            end
+        endcase
+    end
+
+endmodule

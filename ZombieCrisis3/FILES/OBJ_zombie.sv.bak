@@ -1,0 +1,920 @@
+
+module zombie{
+    input logic Clk, Reset, 
+    input logic frame_clk,
+    //zombie control
+    input logic [99:0] Initialization,
+    output logic [99:0] Zombie_Exist, //one-hot encoding, 1 for live and 0 for dead
+ 
+    //zombie information
+    output logic [1:0] Zombie_Direction[100],
+    output logic [9:0] Zombie_X[100],
+    output logic [9:0] Zombie_Y[100],
+    output logic [6:0] Zombie_HP[100],
+    output logic [1:0] Zombie_State[100], //walk, walk, hit, hitten
+    output logic       Ready[100],
+    //interaction
+    //Player
+    input logic [9:0] Player_X[2],
+    input logic [9:0] Player_Y[2],
+    input logic [1:0] Player_Direction[2],
+    input logic       If_Shot[2],
+    //Bullet
+    input logic [6:0]  Bullet_Damage[2],
+    input logic         Bullet_Ready[2],
+    input logic [8:0]   Bullet_Counter[2],
+    input logic [5:0]   Time_Counter[2],
+    //Barrel
+    input logic [29:0] Barrel_Exist,
+    input logic [6:0] Barrel_HP[30],
+    input logic [9:0] Barrel_X[30],
+    input logic [9:0] Barrel_Y[30],
+    input logic [6:0] Barrel_Damage,
+    input logic [9:0] Damage_Range,
+    input logic Boom[30]
+
+};
+
+    parameter [9:0] Zombie_X_Min = 10'd0;
+    parameter [9:0] Zombie_X_Max = 10'd640;
+    parameter [9:0] Zombie_Y_Min = 10'd0;
+    parameter [9:0] Zombie_Y_Max = 10'd6480
+    parameter [9:0] Zombie_Step = 10'd1;
+    parameter [9:0] Zombie_Hitten_Step = 10'd5;
+    parameter [9:0] Zombie_Size = 10'd32;
+    parameter [9:0] Range = 10'd160;
+
+    //Detect rising edge of frame_clk
+    logic frame_clk_delayed, frame_clk_rising_edge;
+    always_ff @ (posedge Clk) begin
+        frame_clk_delayed <= frame_clk;
+        frame_clk_rising_edge <= (frame_clk == 1'b1) && (frame_clk_delayed == 1'b0);
+    end 
+
+    logic [9:0] Zombie_Direction_in[100];
+    logic [9:0] Zombie_X_in[100];
+    logic [9:0] Zombie_Y_in[100];
+    logic [6:0] Zombie_HP_in[100];
+    logic [1:0] Zombie_State_in[100];
+    logic [99:0] Zombie_Exist_in;
+    logic [9:0] X_Motion[100], Y_Motion[100];
+
+    logic Zombie_Hitten[100];
+    logic Zombie_Hitten_in[100];
+    logic [1:0] Hitten_Direction[100];
+    logic [1:0] Hitten_Direction_in[100];
+    logic       Ready_in[100],
+    
+    int DistX_1[100], DistX_2[100];
+    int DistY_1[100], DistY_2[100]; 
+
+    enum logic [1:0] {
+        Hitten_Judgement,
+        Feedback,
+        Idle1,
+        Idle2
+    }State[2], Next_State[2];
+    
+    genvar Id;
+    generate
+    for(Id=0;Id<99;Id=Id+1)
+    begin:xjz
+
+    assign DistX_1[Id] = Zombie_X[Id] - Player_X[0];
+    assign DistX_2[Id] = Zombie_X[Id] - Player_X[1];
+    assign DistY_1[Id] = Zombie_Y[Id] - Player_Y[0];
+    assign DistY_2[Id] = Zombie_Y[Id] - Player_Y[1];
+
+    always_ff @( posedge Clk ) begin 
+        if(Reset)
+        begin
+            Zombie_Direction[Id] <= 2'd0;
+            Zombie_X[Id] <= 10'd0;
+            Zombie_Y[Id] <= 10'd0;
+            Zombie_HP[Id] <= 10'd0;
+            Zombie_State[Id] <= 10'd0;
+            Zombie_Exist[Id] <= 10'd0;
+            Ready[Id] <= 1'b0;
+        end
+        else
+        begin
+            if(Zombie_Exist[Id] == 1'b0)
+            begin
+                if(Initialization[Id]==1)
+                begin
+                    if( Id%2 == 0 )
+                    begin
+                        Zombie_Direction[Id] <=  2'b00;
+                        Zombie_Y[Id] <= 10'd480;
+                    end
+                    else
+                    begin
+                        Zombie_Direction[Id] <= 2'b10;
+                        Zombie_Y[Id] <= 10'd0;
+                    end
+                    Zombie_X[Id] <= (Id%10)*32 +10'd160;//Maybe Wrong
+                    Zombie_HP[Id] <= 7'd127;   
+                    Zombie_Exist[Id] <= 1'b1;
+                    Zombie_Hitten[Id] <= 1'b0; 
+                    Hitten_Direction[Id] <= 2'b00;
+                    State[Id] <= Idle1;
+                    Ready[Id] <= 1'b1;
+                end
+                else
+                begin
+                    Zombie_Direction[Id] <= 2'd0;
+                    Zombie_X[Id] <= 10'd0;
+                    Zombie_Y[Id] <= 10'd0;
+                    Zombie_HP[Id] <= 10'd0;
+                    Zombie_State[Id] <= 10'd0;
+                    Zombie_Exist[Id] <= Zombie_Exist_in[Id];
+                    State[Id] <= Idle1;
+                    Ready[Id] <= 1'b1;
+                end  
+            end
+            else//Normal update
+            begin
+                Zombie_Direction[Id] <= Zombie_Direction_in[Id];
+                Zombie_X[Id] <= Zombie_X_in[Id];
+                Zombie_Y[Id] <= Zombie_Y_in[Id];
+                Zombie_HP[Id] <= Zombie_HP_in[Id];
+                Zombie_State[Id] <= Zombie_State_in[Id];
+                Zombie_Exist[Id] <= Zombie_Exist_in[Id];
+                Zombie_Hitten[Id] <= Zombie_Hitten_in[Id];
+                Hitten_Direction[Id] <= Hitten_Direction_in[Id];
+                State[Id] <= Next_State[Id];
+                Ready[Id] <= Ready_in[Id];                
+            end
+        end
+        
+    end
+    
+    always_comb begin 
+        Zombie_Exist_in[Id] = Zombie_Exist[Id];
+        Zombie_State_in[Id] = Zombie_State[Id];
+        Zombie_HP_in[Id] = Zombie_HP[Id];
+        Zombie_X_in[Id] = Zombie_X[Id];
+        Zombie_Y_in[Id] = Zombie_Y[Id];
+        X_Motion[Id] = 10'b0;
+        Y_Motion[Id] = 10'b0;
+        Zombie_Hitten_in[Id] =  Zombie_Hitten[Id];
+        Hitten_Direction_in[Id] = Hitten_Direction[Id];
+
+        Next_State[Id] = State[Id];         
+
+        int DistX[30];
+        int DistY[30];
+
+        if( Zombie_HP[Id] == 7'd0 )
+            Zombie_Exist_in[Id] = 1'b0;
+
+        case(State[Id])
+            Hitten_Judgement:
+            begin
+                Next_State[Id] = Feedback;
+                if( (If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b01
+                    && (Zombie_X[Id]<Player_X[0] && Zombie_X[Id]+Range > Player_X[0])
+                    && (Zombie_Y[Id]+10'd30 > Player_Y[0]+10'd16 && Zombie_Y[Id]<Player_Y[0]+10'd16))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b01
+                    && (Zombie_X[Id]<Player_X[1] && Zombie_X[Id]+Range > Player_X[1])
+                    && (Zombie_Y[Id]+10'd30 > Player_Y[1]+10'd16 && Zombie_Y[Id]<Player_Y[1]+10'd16)))
+                begin//To Left
+                    Zombie_Hitten_in[Id] = 1'b1;
+                    if(Zombie_HP_in[Id] > Bullet_Damage[0])begin
+                        Zombie_HP_in[Id] = Zombie_HP[Id] - Bullet_Damage[0];
+                        Hitten_Direction_in[Id] = 2'b01;
+                    end
+                    else begin
+                        Zombie_HP_in[Id] = 7'b0;
+                    end
+                end
+                else if((If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b11
+                    && (Zombie_X[Id]>Player_X[0] && Zombie_X[Id]< Player_X[0]+Range)
+                    && (Zombie_Y[Id]+10'd30 > Player_Y[0]+10'd16 && Zombie_Y[Id]<Player_Y[0]+10'd16))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b11
+                    && (Zombie_X[Id]>Player_X[1] && Zombie_X[Id]< Player_X[1]+Range)
+                    && (Zombie_Y[Id]+10'd30 > Player_Y[1]+10'd16 && Zombie_Y[Id]<Player_Y[1]+10'd16)))
+                begin//To Right
+                    if(Zombie_HP_in[Id] > Bullet_Damage[0])begin
+                        Zombie_HP_in[Id] = Zombie_HP[Id] - Bullet_Damage[0];
+                        Hitten_Direction_in[Id] = 2'b11;
+                    end
+                    else begin
+                        Zombie_HP_in[Id] = 7'b0;
+                    end
+                    Zombie_Hitten_in[Id] = 1'b1;
+                end
+                else if((If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b10
+                    &&(Zombie_Y[Id]>Player_Y[0] && Zombie_Y[Id]< Player_Y[0]+Range)
+                    &&(Zombie_X[Id]+10'd24 > Player_X[0]+10'd8 && Zombie_X[Id]<Player_X[0]+10'd8))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b10
+                    &&(Zombie_Y[Id]>Player_Y[1] && Zombie_Y[Id]< Player_Y[1]+Range)
+                    &&(Zombie_X[Id]+10'd24 > Player_X[1]+10'd8 && Zombie_X[Id]<Player_X[1]+10'd8)))
+                begin//To Down
+                    if(Zombie_HP_in[Id] > Bullet_Damage[0])begin
+                        Zombie_HP_in[Id] = Zombie_HP[Id] - Bullet_Damage[0];
+                        Hitten_Direction_in[Id] = 2'b10;
+                    end
+                    else begin
+                        Zombie_HP_in[Id] = 7'b0;
+                    end
+                    Zombie_Hitten_in[Id] = 1'b1;
+                end
+                else if((If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b00
+                    &&(Zombie_Y[Id]<Player_Y[0] && Zombie_Y[Id]+Range > Player_Y[0])
+                    &&(Zombie_X[Id]+10'd24 > Player_X[0]+10'd8 && Zombie_X[Id]<Player_X[0]+10'd8))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b00
+                    &&(Zombie_Y[Id]<Player_Y[1] && Zombie_Y[Id]+Range > Player_Y[1])
+                    &&(Zombie_X[Id]+10'd24 > Player_X[1]+10'd24 && Zombie_X[Id]<Player_X[1]+10'd24)))
+                begin//To Up
+                    if(Zombie_HP_in[Id] > Bullet_Damage[0])begin
+                        Zombie_HP_in[Id] = Zombie_HP[Id] - Bullet_Damage[0];
+                        Hitten_Direction_in[Id] = 2'b00;
+                    end
+                    else begin
+                        Zombie_HP_in[Id] = 7'b0;
+                    end
+                    Zombie_Hitten_in[Id] = 1'b1;
+                end
+                //priority:fire ball
+                //priority:barrel
+                else if(Barrel_Exist != 30'b0)
+                begin 
+                    for(int i =0 ; i<30; i = i+1)
+                    begin
+                        DistX[i] = Zombie_X[Id] - Barrel_X[i];
+                        DistY[i] = Zombie_Y[Id] - Barrel_Y[i];
+                        if(Boom[i]==1'b1 &&  DistX[i]*DistX[i] + DistY[i]*DistY[i] <= Damage_Range)
+                        begin
+                            if(Zombie_HP[Id] > Zombie_Damage)begin
+                            Zombie_HP_in[Id] = Zombie_HP[Id] - Barrel_Damage;
+                            end
+                            else begin
+                                Zombie_HP_in[Id] = 7'b0;
+                            end
+                            Zombie_Hitten_in[Id] = 1'b1;
+                        end
+                    end
+                end
+            end
+
+            Feedback:
+            begin
+                Next_State[Id] = Idle1;
+                if( Zombie_Exist[Id] == 1'b1 )
+                begin
+                    //Move Control
+                    Zombie_X_in[Id] = Zombie_X[Id] + X_Motion[Id];
+                    Zombie_Y_in[Id] = Zombie_Y[Id] + Y_Motion[Id];
+                    //Boundary Check
+                    if( Zombie_X_in[Id] > Zombie_X_Max )
+                            Zombie_X_in[Id] = Zombie_X[Id];
+                    if( Zombie_Y_in[Id] > Zombie_Y_Max )
+                            Zombie_Y_in[Id] = Zombie_Y[Id];
+                    //
+                    if( Zombie_Hitten[Id] == 1'b0 )
+                    begin
+                        if( DistX_1[Id]*DistX_1[Id] + DistY_1[Id]*DistY_1[Id] <= 24*24 || DistX_2[Id]*DistX_2[Id] + DistY_2[Id]*DistY_2[Id] <= 24*24 )
+                        begin//Hit the Player(如果一起打呢？)
+                            Zombie_State_in[Id] = 2'd2;
+                            X_motion[Id] = 10'b0;
+                            Y_Motion[Id] = 10'b0;
+                        end
+                        else
+                        begin//Normal movement
+                            if( DistX_1[Id]*DistX_1[Id] + DistY_1[Id]*DistY_1[Id] <= DistX_2[Id]*DistX_2[Id] + DistY_2[Id]*DistY_2[Id])
+                            begin//Move to Player_1 (index 0)
+                                if( DistX_1[Id]*DistX_1[Id] > DistY_1[Id]*DistY_1[Id] ) 
+                                begin// Move towards X-axis
+                                    Y_Motion[Id] = 10'd0;
+                                    if(Player_X[0]< Zombie_X[Id])
+                                    begin
+                                        Zombie_Direction[Id] = 2'b01;
+                                        X_Motiion[Id] = ~(Zombie_Step) + 10'b1;
+                                    end
+                                    else
+                                    begin
+                                        Zombie_Direction[Id] = 2'b11;
+                                        X_Motiion[Id] = Zombie_Step;
+                                    end
+                                end
+                                else
+                                begin//Move towards Y_axist
+                                    X_Motion[Id] = 10'd0;
+                                    if(Player_Y[0]< Zombie_Y[Id])
+                                    begin
+                                        Zombie_Direction[Id] = 2'b10;
+                                        Y_Motiion[Id] = Zombie_Step; 
+                                    end
+                                    else
+                                    begin
+                                        Zombie_Direction[Id] = 2'b00;
+                                        Y_Motiion[Id] = ~(Zombie_Step) + 10'b1;
+                                    end
+                                end
+                            end
+                            else
+                            begin
+                                if( DistX_2[Id]*DistX_2[Id] > DistY_2[Id]*DistY_2[Id] ) 
+                                begin// Move towards X-axis
+                                    Y_Motion[Id] = 10'd0;
+                                    if(Player_X[1]< Zombie_X[Id])
+                                    begin
+                                        Zombie_Direction[Id] = 2'b01;
+                                        X_Motiion[Id] = ~(Zombie_Step) + 10'b1;
+                                    end
+                                    else
+                                    begin
+                                        Zombie_Direction[Id] = 2'b11;
+                                        X_Motiion[Id] = Zombie_Step;
+                                    end
+                                end
+                                else
+                                begin//Move towards Y_axist
+                                    X_Motion[Id] = 10'd0;
+                                    if(Player_Y[1]< Zombie_Y[Id])
+                                    begin
+                                        Zombie_Direction[Id] = 2'b00;
+                                        Y_Motiion[Id] =  ~(Zombie_Step) + 10'b1;
+                                    end
+                                    else
+                                    begin
+                                        Zombie_Direction[Id] = 2'b10;
+                                        Y_Motiion[Id] = Zombie_Step;
+                                    end
+                                end
+                            end
+                            //State Change
+                            if(Zombie_State[Id][1] == 1'b1)
+                                Zombie_State_in[Id] = 2'b0;
+                            else//Continuous Walk
+                                Zombie_State_in[Id][0] = ~Zombie_State[Id][0];
+                        end
+                    end      
+                end
+                else //Being Hitten -> feedback
+                begin
+                    Zombie_Hitten_in[Id] = 1'b0;
+                    Zombie_State_in[Id] = 2'b11;
+                    case(Hitten_DirectionId])
+                        2'b00: //To Up
+                        begin
+                            X_Motion = 10'b0;
+                            Y_Motion = ~(Zombie_Hitten_Step) + 10'b1;
+                            Zombie_Direction_in[Id] = 2'b10; 
+                        end
+                        2'b01://To Left
+                        begin
+                            X_Motion = ~(Zombie_Hitten_Step) + 10'b1;
+                            Y_Motion = 10'b0;
+                            Zombie_Direction_in[Id] = 2'b11;
+                        end
+                        2'b10://To Down
+                        begin
+                            X_Motion = 10'b0;
+                            Y_Motion = Zombie_Hitten_Step;
+                            Zombie_Direction_in[Id] = 2'b00;
+                        end
+                        2'b11://To Right
+                        begin
+                            X_Motion = Zombie_Hitten_Step;
+                            Y_Motion = 10'b0;
+                            Zombie_Direction_in[Id] = 2'b01;
+                        end
+                            
+                    endcase
+                end
+            end
+
+            Idle1:
+            begin
+                Ready_in[Id] = 1'b1;
+                if (frame_clk_rising_edge && Ready[Id])
+                    Next_State[Id] = Idle2;                 
+            end
+            Idle2:
+            begin
+                Ready_in[Id] = 1'b0;
+                if( Bullet_Ready[Id] == 1'b1)
+                    Next_State[Id] = Hitten_Judgement; 
+            end
+        endcase     
+ 
+    end
+
+    end
+    endgenerate
+
+endmodule
+
+
+module Zombie_Generator(
+    input logic Generate,
+    input logic [99:0] Zombie_Exist,
+    output logic [99:0] Initialization,
+);
+    always_comb begin 
+
+        Initialization = 100'b0;
+        if( Generate == 1'b1 )begin
+            if(Zombie_Exist[0]==1'b0)begin
+                Initialization[0]=1'b1;
+            end
+            else begin
+                if(Zombie_Exist[1]==1'b0)begin
+                    Initialization[1]=1'b1;
+                end
+                else begin
+                    if(Zombie_Exist[2]==1'b0)begin
+                        Initialization[2]=1'b1;
+                    end
+                    else begin
+                        if(Zombie_Exist[3]==1'b0)begin
+                            Initialization[3]=1'b1;
+                        end
+                        else begin
+                            if(Zombie_Exist[4]==1'b0)begin
+                                Initialization[4]=1'b1;
+                            end
+                            else begin
+                                if(Zombie_Exist[5]==1'b0)begin
+                                    Initialization[5]=1'b1;
+                                end
+                                else begin
+                                    if(Zombie_Exist[6]==1'b0)begin
+                                        Initialization[6]=1'b1;
+                                    end
+                                    else begin
+                                        if(Zombie_Exist[7]==1'b0)begin
+                                            Initialization[7]=1'b1;
+                                        end
+                                        else begin
+                                            if(Zombie_Exist[8]==1'b0)begin
+                                                Initialization[8]=1'b1;
+                                            end
+                                            else begin
+                                                if(Zombie_Exist[9]==1'b0)begin
+                                                    Initialization[9]=1'b1;
+                                                end
+                                                else begin
+                                                    if(Zombie_Exist[10]==1'b0)begin
+                                                        Initialization[10]=1'b1;
+                                                    end
+                                                    else begin
+                                                        if(Zombie_Exist[11]==1'b0)begin
+                                                            Initialization[11]=1'b1;
+                                                        end
+                                                        else begin
+                                                            if(Zombie_Exist[12]==1'b0)begin
+                                                                Initialization[12]=1'b1;
+                                                            end
+                                                            else begin
+                                                                if(Zombie_Exist[13]==1'b0)begin
+                                                                    Initialization[13]=1'b1;
+                                                                end
+                                                                else begin
+                                                                    if(Zombie_Exist[14]==1'b0)begin
+                                                                        Initialization[14]=1'b1;
+                                                                    end
+                                                                    else begin
+                                                                        if(Zombie_Exist[15]==1'b0)begin
+                                                                            Initialization[15]=1'b1;
+                                                                        end
+                                                                        else begin
+                                                                            if(Zombie_Exist[16]==1'b0)begin
+                                                                                Initialization[16]=1'b1;
+                                                                            end
+                                                                            else begin
+                                                                                if(Zombie_Exist[17]==1'b0)begin
+                                                                                    Initialization[17]=1'b1;
+                                                                                end
+                                                                                else begin
+                                                                                    if(Zombie_Exist[18]==1'b0)begin
+                                                                                        Initialization[18]=1'b1;
+                                                                                    end
+                                                                                    else begin
+                                                                                        if(Zombie_Exist[19]==1'b0)begin
+                                                                                            Initialization[19]=1'b1;
+                                                                                        end
+                                                                                        else begin
+                                                                                            if(Zombie_Exist[20]==1'b0)begin
+                                                                                                Initialization[20]=1'b1;
+                                                                                            end
+                                                                                            else begin
+                                                                                                if(Zombie_Exist[21]==1'b0)begin
+                                                                                                    Initialization[21]=1'b1;
+                                                                                                end
+                                                                                                else begin
+                                                                                                    if(Zombie_Exist[22]==1'b0)begin
+                                                                                                        Initialization[22]=1'b1;
+                                                                                                    end
+                                                                                                    else begin
+                                                                                                        if(Zombie_Exist[23]==1'b0)begin
+                                                                                                            Initialization[23]=1'b1;
+                                                                                                        end
+                                                                                                        else begin
+                                                                                                            if(Zombie_Exist[24]==1'b0)begin
+                                                                                                                Initialization[24]=1'b1;
+                                                                                                            end
+                                                                                                            else begin
+                                                                                                                if(Zombie_Exist[25]==1'b0)begin
+                                                                                                                    Initialization[25]=1'b1;
+                                                                                                                end
+                                                                                                                else begin
+                                                                                                                    if(Zombie_Exist[26]==1'b0)begin
+                                                                                                                        Initialization[26]=1'b1;
+                                                                                                                    end
+                                                                                                                    else begin
+                                                                                                                        if(Zombie_Exist[27]==1'b0)begin
+                                                                                                                            Initialization[27]=1'b1;
+                                                                                                                        end
+                                                                                                                        else begin
+                                                                                                                            if(Zombie_Exist[28]==1'b0)begin
+                                                                                                                                Initialization[28]=1'b1;
+                                                                                                                            end
+                                                                                                                            else begin
+                                                                                                                                if(Zombie_Exist[29]==1'b0)begin
+                                                                                                                                    Initialization[29]=1'b1;
+                                                                                                                                end
+                                                                                                                                else begin
+                                                                                                                                    if(Zombie_Exist[30]==1'b0)begin
+                                                                                                                                        Initialization[30]=1'b1;
+                                                                                                                                    end
+                                                                                                                                    else begin
+                                                                                                                                        if(Zombie_Exist[31]==1'b0)begin
+                                                                                                                                            Initialization[31]=1'b1;
+                                                                                                                                        end
+                                                                                                                                        else begin
+                                                                                                                                            if(Zombie_Exist[32]==1'b0)begin
+                                                                                                                                                Initialization[32]=1'b1;
+                                                                                                                                            end
+                                                                                                                                            else begin
+                                                                                                                                                if(Zombie_Exist[33]==1'b0)begin
+                                                                                                                                                    Initialization[33]=1'b1;
+                                                                                                                                                end
+                                                                                                                                                else begin
+                                                                                                                                                    if(Zombie_Exist[34]==1'b0)begin
+                                                                                                                                                        Initialization[34]=1'b1;
+                                                                                                                                                    end
+                                                                                                                                                    else begin
+                                                                                                                                                        if(Zombie_Exist[35]==1'b0)begin
+                                                                                                                                                            Initialization[35]=1'b1;
+                                                                                                                                                        end
+                                                                                                                                                        else begin
+                                                                                                                                                            if(Zombie_Exist[36]==1'b0)begin
+                                                                                                                                                                Initialization[36]=1'b1;
+                                                                                                                                                            end
+                                                                                                                                                            else begin
+                                                                                                                                                                if(Zombie_Exist[37]==1'b0)begin
+                                                                                                                                                                    Initialization[37]=1'b1;
+                                                                                                                                                                end
+                                                                                                                                                                else begin
+                                                                                                                                                                    if(Zombie_Exist[38]==1'b0)begin
+                                                                                                                                                                        Initialization[38]=1'b1;
+                                                                                                                                                                    end
+                                                                                                                                                                    else begin
+                                                                                                                                                                        if(Zombie_Exist[39]==1'b0)begin
+                                                                                                                                                                            Initialization[39]=1'b1;
+                                                                                                                                                                        end
+                                                                                                                                                                        else begin
+                                                                                                                                                                            if(Zombie_Exist[40]==1'b0)begin
+                                                                                                                                                                                Initialization[40]=1'b1;
+                                                                                                                                                                            end
+                                                                                                                                                                            else begin
+                                                                                                                                                                                if(Zombie_Exist[41]==1'b0)begin
+                                                                                                                                                                                    Initialization[41]=1'b1;
+                                                                                                                                                                                end
+                                                                                                                                                                                else begin
+                                                                                                                                                                                    if(Zombie_Exist[42]==1'b0)begin
+                                                                                                                                                                                        Initialization[42]=1'b1;
+                                                                                                                                                                                    end
+                                                                                                                                                                                    else begin
+                                                                                                                                                                                        if(Zombie_Exist[43]==1'b0)begin
+                                                                                                                                                                                            Initialization[43]=1'b1;
+                                                                                                                                                                                        end
+                                                                                                                                                                                        else begin
+                                                                                                                                                                                            if(Zombie_Exist[44]==1'b0)begin
+                                                                                                                                                                                                Initialization[44]=1'b1;
+                                                                                                                                                                                            end
+                                                                                                                                                                                            else begin
+                                                                                                                                                                                                if(Zombie_Exist[45]==1'b0)begin
+                                                                                                                                                                                                    Initialization[45]=1'b1;
+                                                                                                                                                                                                end
+                                                                                                                                                                                                else begin
+                                                                                                                                                                                                    if(Zombie_Exist[46]==1'b0)begin
+                                                                                                                                                                                                        Initialization[46]=1'b1;
+                                                                                                                                                                                                    end
+                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                        if(Zombie_Exist[47]==1'b0)begin
+                                                                                                                                                                                                            Initialization[47]=1'b1;
+                                                                                                                                                                                                        end
+                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                            if(Zombie_Exist[48]==1'b0)begin
+                                                                                                                                                                                                                Initialization[48]=1'b1;
+                                                                                                                                                                                                            end
+                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                if(Zombie_Exist[49]==1'b0)begin
+                                                                                                                                                                                                                    Initialization[49]=1'b1;
+                                                                                                                                                                                                                end
+                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                    if(Zombie_Exist[50]==1'b0)begin
+                                                                                                                                                                                                                        Initialization[50]=1'b1;
+                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                        if(Zombie_Exist[51]==1'b0)begin
+                                                                                                                                                                                                                            Initialization[51]=1'b1;
+                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                            if(Zombie_Exist[52]==1'b0)begin
+                                                                                                                                                                                                                                Initialization[52]=1'b1;
+                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                if(Zombie_Exist[53]==1'b0)begin
+                                                                                                                                                                                                                                    Initialization[53]=1'b1;
+                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                    if(Zombie_Exist[54]==1'b0)begin
+                                                                                                                                                                                                                                        Initialization[54]=1'b1;
+                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                        if(Zombie_Exist[55]==1'b0)begin
+                                                                                                                                                                                                                                            Initialization[55]=1'b1;
+                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                            if(Zombie_Exist[56]==1'b0)begin
+                                                                                                                                                                                                                                                Initialization[56]=1'b1;
+                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                if(Zombie_Exist[57]==1'b0)begin
+                                                                                                                                                                                                                                                    Initialization[57]=1'b1;
+                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                    if(Zombie_Exist[58]==1'b0)begin
+                                                                                                                                                                                                                                                        Initialization[58]=1'b1;
+                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                        if(Zombie_Exist[59]==1'b0)begin
+                                                                                                                                                                                                                                                            Initialization[59]=1'b1;
+                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                            if(Zombie_Exist[60]==1'b0)begin
+                                                                                                                                                                                                                                                                Initialization[60]=1'b1;
+                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                if(Zombie_Exist[61]==1'b0)begin
+                                                                                                                                                                                                                                                                    Initialization[61]=1'b1;
+                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                    if(Zombie_Exist[62]==1'b0)begin
+                                                                                                                                                                                                                                                                        Initialization[62]=1'b1;
+                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                        if(Zombie_Exist[63]==1'b0)begin
+                                                                                                                                                                                                                                                                            Initialization[63]=1'b1;
+                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                            if(Zombie_Exist[64]==1'b0)begin
+                                                                                                                                                                                                                                                                                Initialization[64]=1'b1;
+                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                if(Zombie_Exist[65]==1'b0)begin
+                                                                                                                                                                                                                                                                                    Initialization[65]=1'b1;
+                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                    if(Zombie_Exist[66]==1'b0)begin
+                                                                                                                                                                                                                                                                                        Initialization[66]=1'b1;
+                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                        if(Zombie_Exist[67]]==1'b0)begin
+                                                                                                                                                                                                                                                                                            Initialization[67]=1'b1;
+                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                            if(Zombie_Exist[68]==1'b0)begin
+                                                                                                                                                                                                                                                                                                Initialization[68]=1'b1;
+                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                if(Zombie_Exist[69]==1'b0)begin
+                                                                                                                                                                                                                                                                                                    Initialization[69]=1'b1;
+                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[70]==1'b0)begin
+                                                                                                                                                                                                                                                                                                        Initialization[70]=1'b1;
+                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[71]==1'b0)begin
+                                                                                                                                                                                                                                                                                                            Initialization[71]=1'b1;
+                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                                            if(Zombie_Exist[72]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                Initialization[72]=1'b1;
+                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                                if(Zombie_Exist[73]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                    Initialization[73]=1'b1;
+                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[74]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                        Initialization[74]=1'b1;
+                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[75]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                            Initialization[75]=1'b1;
+                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                                                            if(Zombie_Exist[76]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                Initialization[76]=1'b1;
+                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                                                if(Zombie_Exist[77]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                    Initialization[77]=1'b1;
+                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[78]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                        Initialization[78]=1'b1;
+                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[79]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                            Initialization[79]=1'b1;
+                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                                                                            if(Zombie_Exist[80]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                Initialization[80]=1'b1;
+                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                                                                if(Zombie_Exist[81]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                    Initialization[81]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[82]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                        Initialization[82]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[83]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                            Initialization[83]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                                                                                            if(Zombie_Exist[84]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                Initialization[84]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                                                                                if(Zombie_Exist[85]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                    Initialization[85]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[86]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                        Initialization[86]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[87]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                            Initialization[87]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                                                                                                            if(Zombie_Exist[88]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                Initialization[88]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                                                                                                if(Zombie_Exist[89]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                    Initialization[89]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[90]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                        Initialization[90]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[91]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                            Initialization[91]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                                                                                                                            if(Zombie_Exist[92]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                Initialization[92]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                                                                                                                if(Zombie_Exist[93]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                    Initialization[93]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[94]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                        Initialization[94]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[95]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                            Initialization[95]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                                                                        else begin
+                                                                                                                                                                                                                                                                                                                                                                                                            if(Zombie_Exist[96]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                                Initialization[96]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                                                                            else begin
+                                                                                                                                                                                                                                                                                                                                                                                                                if(Zombie_Exist[97]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                                    Initialization[97]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                                                                                else begin
+                                                                                                                                                                                                                                                                                                                                                                                                                    if(Zombie_Exist[98]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                                        Initialization[98]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                                                                    else begin
+                                                                                                                                                                                                                                                                                                                                                                                                                        if(Zombie_Exist[99]==1'b0)begin
+                                                                                                                                                                                                                                                                                                                                                                                                                            Initialization[99]=1'b1;
+                                                                                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                                end
+                                                                                                                                                                                                                            end
+                                                                                                                                                                                                                        end
+                                                                                                                                                                                                                    end
+                                                                                                                                                                                                                end
+                                                                                                                                                                                                            end
+                                                                                                                                                                                                        end
+                                                                                                                                                                                                    end
+                                                                                                                                                                                                end
+                                                                                                                                                                                            end
+                                                                                                                                                                                        end
+                                                                                                                                                                                    end
+                                                                                                                                                                                end
+                                                                                                                                                                            end
+                                                                                                                                                                        end
+                                                                                                                                                                    end
+                                                                                                                                                                end
+                                                                                                                                                            end
+                                                                                                                                                        end
+                                                                                                                                                    end
+                                                                                                                                                end
+                                                                                                                                            end
+                                                                                                                                        end
+                                                                                                                                    end
+                                                                                                                                end
+                                                                                                                            end
+                                                                                                                        end
+                                                                                                                    end
+                                                                                                                end
+                                                                                                            end
+                                                                                                        end
+                                                                                                    end
+                                                                                                end
+                                                                                            end
+                                                                                        end
+                                                                                    end
+                                                                                end
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+endmodule

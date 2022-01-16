@@ -1,0 +1,209 @@
+------------------------------------------------------------
+Timing Analyzer Summary
+------------------------------------------------------------
+
+Type  : Slow 1200mV 85C Model Setup 'CLOCK_50'
+Slack : -2.536
+TNS   : -400.535
+
+Type  : Slow 1200mV 85C Model Setup 'Devil:Devil|frame_clk_rising_edge'
+Slack : -1.892
+TNS   : -31.549
+
+Type  : Slow 1200mV 85C Model Setup 'PS2_KBCLK'
+Slack : -0.341
+TNS   : -1.311
+
+Type  : Slow 1200mV 85C Model Setup 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 13.327
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Hold 'CLOCK_50'
+Slack : 0.340
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Hold 'Devil:Devil|frame_clk_rising_edge'
+Slack : 0.343
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Hold 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 0.403
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Hold 'PS2_KBCLK'
+Slack : 0.461
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Recovery 'PS2_KBCLK'
+Slack : -1.110
+TNS   : -20.615
+
+Type  : Slow 1200mV 85C Model Recovery 'CLOCK_50'
+Slack : 18.005
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Removal 'PS2_KBCLK'
+Slack : 1.419
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Removal 'CLOCK_50'
+Slack : 1.499
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Minimum Pulse Width 'PS2_KBCLK'
+Slack : -3.000
+TNS   : -28.700
+
+Type  : Slow 1200mV 85C Model Minimum Pulse Width 'Devil:Devil|frame_clk_rising_edge'
+Slack : 0.402
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Minimum Pulse Width 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[0]'
+Slack : 4.705
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Minimum Pulse Width 'CLOCK_50'
+Slack : 9.622
+TNS   : 0.000
+
+Type  : Slow 1200mV 85C Model Minimum Pulse Width 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 19.711
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Setup 'CLOCK_50'
+Slack : -2.284
+TNS   : -316.456
+
+Type  : Slow 1200mV 0C Model Setup 'Devil:Devil|frame_clk_rising_edge'
+Slack : -1.830
+TNS   : -30.711
+
+Type  : Slow 1200mV 0C Model Setup 'PS2_KBCLK'
+Slack : -0.237
+TNS   : -0.546
+
+Type  : Slow 1200mV 0C Model Setup 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 14.030
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Hold 'CLOCK_50'
+Slack : 0.336
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Hold 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 0.354
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Hold 'PS2_KBCLK'
+Slack : 0.425
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Hold 'Devil:Devil|frame_clk_rising_edge'
+Slack : 0.497
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Recovery 'PS2_KBCLK'
+Slack : -0.823
+TNS   : -14.979
+
+Type  : Slow 1200mV 0C Model Recovery 'CLOCK_50'
+Slack : 18.206
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Removal 'PS2_KBCLK'
+Slack : 1.213
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Removal 'CLOCK_50'
+Slack : 1.377
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Minimum Pulse Width 'PS2_KBCLK'
+Slack : -3.000
+TNS   : -28.700
+
+Type  : Slow 1200mV 0C Model Minimum Pulse Width 'Devil:Devil|frame_clk_rising_edge'
+Slack : 0.316
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Minimum Pulse Width 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[0]'
+Slack : 4.691
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Minimum Pulse Width 'CLOCK_50'
+Slack : 9.641
+TNS   : 0.000
+
+Type  : Slow 1200mV 0C Model Minimum Pulse Width 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 19.711
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Setup 'CLOCK_50'
+Slack : -1.388
+TNS   : -125.370
+
+Type  : Fast 1200mV 0C Model Setup 'Devil:Devil|frame_clk_rising_edge'
+Slack : -0.720
+TNS   : -9.910
+
+Type  : Fast 1200mV 0C Model Setup 'PS2_KBCLK'
+Slack : 0.345
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Setup 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 16.422
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Hold 'CLOCK_50'
+Slack : -0.081
+TNS   : -0.081
+
+Type  : Fast 1200mV 0C Model Hold 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 0.182
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Hold 'PS2_KBCLK'
+Slack : 0.205
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Hold 'Devil:Devil|frame_clk_rising_edge'
+Slack : 0.252
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Recovery 'PS2_KBCLK'
+Slack : -0.319
+TNS   : -5.403
+
+Type  : Fast 1200mV 0C Model Recovery 'CLOCK_50'
+Slack : 18.980
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Removal 'CLOCK_50'
+Slack : 0.717
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Removal 'PS2_KBCLK'
+Slack : 0.911
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Minimum Pulse Width 'PS2_KBCLK'
+Slack : -3.000
+TNS   : -31.938
+
+Type  : Fast 1200mV 0C Model Minimum Pulse Width 'Devil:Devil|frame_clk_rising_edge'
+Slack : 0.185
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Minimum Pulse Width 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[0]'
+Slack : 4.781
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Minimum Pulse Width 'CLOCK_50'
+Slack : 9.370
+TNS   : 0.000
+
+Type  : Fast 1200mV 0C Model Minimum Pulse Width 'sram_clk_instance|altpll_component|auto_generated|pll1|clk[1]'
+Slack : 19.781
+TNS   : 0.000
+
+------------------------------------------------------------

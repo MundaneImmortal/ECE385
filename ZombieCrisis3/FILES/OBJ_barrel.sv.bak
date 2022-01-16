@@ -1,0 +1,290 @@
+
+
+module barrel(
+    input logic Clk,Rest,
+    input logic frame_clk,
+    //Control Signal
+    input logic [4:0] Player_Control[2],
+    input logic [6:0] Player_HP[2],
+    input logic [1:0] Weapon[2],
+    input logic If_Shot[2],  
+    input logic [9:0] Player_X[2],
+    input logic [9:0] Player_Y[2],
+    input logic [1:0] Player_Direction[2],
+    input logic [6:0] Bullet_Damage[2],
+//    input logic [2:0] Collision_Map[640*480],
+
+    output logic [29:0] Barrel_Exist,
+    output logic [6:0] Barrel_HP[30],
+    output logic [9:0] Barrel_X[30],
+    output logic [9:0] Barrel_Y[30],
+    output logic [6:0] Barrel_Damage,
+    output logic [9:0] Damage_Range,
+    output logic [30]  Boom
+    
+);
+
+    logic [29:0] Barrel_Exist_in;
+    logic [6:0] Barrel_HP_in[30];
+    logic [9:0] Barrel_X_in[30];
+    logic [9:0] Barrel_Y_in[30];
+    logic [10:0] Barrel_X_Extention[30];
+    logic [10:0] Barrel_Y_Extension[30];
+    logic [30] Boom_in;
+
+    logic [4:0] Barrel_Num[2];
+    logic [4:0] Barrel_Num_in[2];
+
+    assign Barrel_Damage = 7'd32;
+    assign Damage_Range = 10'd64;
+
+    genvar Id;
+    generate
+    for(Id=0;Id<30;Id=Id+1)
+    begin:xjz
+
+        always_ff @( posedge Clk ) begin 
+            if(Start)
+            begin
+                Barrel_Exist[Id] <= Barrel_Exist_in[Id];
+                Barrel_HP[Id] <= Barrel_HP_in[Id];
+                Barrel_X[Id] <= Barrel_X_in[Id];
+                Barrel_Y[Id] <= Barrel_Y_in[Id];
+                Boom[Id] <= Boom_in[Id];
+            end
+            else begin
+                Barrel_Exist[Id] <= 1'b0;
+                Barrel_HP[Id] <= 7'd0;
+                Barrel_X[Id] <= 10'd0;
+                Barrel_Y[Id] <= 10'd0;
+                Boom[Id] <= 1'b0;
+            end
+        end
+        
+        always_comb begin 
+            Barrel_X_in[Id] = Barrel_X[Id];
+            Barrel_Y_in[Id] = Barrel_Y[Id];
+            Barrel_HP_in[Id] = Barrel_HP_in[Id];
+            Barrel_Exist_in[Id] = Barrel_Exist[Id];
+            Boom_in[Id] = Boom[Id];
+
+            if(Barrel_Exist[Id] == 1'b1)
+            begin
+                //Update Existence
+                if(Barrel_HP_in[Id] = 7'b0)
+                begin
+                    Barrel_Exist_in[Id] = 1'b0;
+                    Boom_in[Id] = 1'b0;
+                end
+                //Damage Detection
+                //Gunshot
+                if( ((If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b01
+                    && (Barrel_X[Id]<Player_X[0] && Barrel_X[Id]+Range > Player_X[0])
+                    && (Barrel_Y[Id]+10'd30 > Player_Y[0]+10'd16 && Barrel_Y[Id]<Player_Y[0]+10'd16))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b01
+                    && (Barrel_X[Id]<Player_X[1] && Barrel_X[Id]+Range > Player_X[1])
+                    && (Barrel_Y[Id]+10'd30 > Player_Y[1]+10'd16 && Barrel_Y[Id]<Player_Y[1]+10'd16)))
+                    ||
+                    ((If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b11
+                    && (Barrel_X[Id]>Player_X[0] && Barrel_X[Id]< Player_X[0]+Range)
+                    && (Barrel_Y[Id]+10'd30 > Player_Y[0]+10'd16 && Barrel_Y[Id]<Player_Y[0]+10'd16))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b11
+                    && (Barrel_X[Id]>Player_X[1] && Barrel_X[Id]< Player_X[1]+Range)
+                    && (Barrel_Y[Id]+10'd30 > Player_Y[1]+10'd16 && Barrel_Y[Id]<Player_Y[1]+10'd16)))
+                    ||
+                    ((If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b10
+                    &&(Barrel_Y[Id]>Player_Y[0] && Barrel_Y[Id]< Player_Y[0]+Range)
+                    &&(Barrel_X[Id]+10'd24 > Player_X[0]+10'd8 && Barrel_X[Id]<Player_X[0]+10'd8))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b10
+                    &&(Barrel_Y[Id]>Player_Y[1] && Barrel_Y[Id]< Player_Y[1]+Range)
+                    &&(Barrel_X[Id]+10'd24 > Player_X[1]+10'd8 && Barrel_X[Id]<Player_X[1]+10'd8)))
+                    ||
+                    ((If_Shot[0] == 1'b1 && Player_Direction[0] == 2'b00
+                    &&(Barrel_Y[Id]<Player_Y[0] && Barrel_Y[Id]+Range > Player_Y[0])
+                    &&(Barrel_X[Id]+10'd24 > Player_X[0]+10'd8 && Barrel_X[Id]<Player_X[0]+10'd8))
+                    || (If_Shot[1] == 1'b1 && Player_Direction[1] == 2'b00
+                    &&(Barrel_Y[Id]<Player_Y[1] && Barrel_Y[Id]+Range > Player_Y[1])
+                    &&(Barrel_X[Id]+10'd24 > Player_X[1]+10'd24 && Barrel_X[Id]<Player_X[1]+10'd24))))
+                begin//To Left
+                    if(Barrel_HP[Id] > Bullet_Damage[0])begin
+                        Barrel_HP_in[Id] = Barrel_HP[Id] - Bullet_Damage[0];
+                    end
+                    else begin
+                        Barrel_HP_in[Id] = 7'b0;
+                        if(Barrel_HP[Id] > 7'd0)
+                            Boom_in[Id] = 1'b1;
+                    end
+                end
+                //other barrel
+                int DistX[30];
+                int DistY[30];
+                for(int i = 0; i<30; i = i+1)
+                begin
+                    DistX[i] = Barrel_X[Id] - Barrel_X[i];
+                    DistY[i] = Barrel_Y[Id] - Barrel_Y[i];
+
+                    if(i!=Id && Boom[Id] == 1'b1 &&  DistX[i]*DistX[i] + DistY[i]*DistY[i] <= Damage_Range)
+                    begin
+                        if(Barrel_HP[Id] > Barrel_Damage)begin
+                        Barrel_HP_in[Id] = Barrel_HP[Id] - Barrel_Damage;
+                        end
+                        else begin
+                            Barrel_HP_in[Id] = 7'b0;
+                            if(Barrel_HP[Id] > 7'd0)
+                                Boom_in[Id] = 1'b1;
+                        end
+                    end
+                end
+                //
+            end
+            else begin
+
+            end
+        end
+    end
+    endgenerate
+
+    genvar j;
+    generate
+    for(j=0;Id<2;j=j+1)
+    begin:xjz
+
+        always_ff @( Clk ) begin 
+            if(Start)
+                Barrel_Num[j] <= Barrel_Num_in[j];
+            else
+                Barrel_Num[j] <= 5'b0;
+        end
+
+        always_comb
+        begin
+            Barrel_Num_in[j] = Barrel_Num[j];
+            if(Player_Control[j][3] == 1'b1 && Weapon[j] == 2'b01 && Player_HP[j] != 7'b0 && Barrel_Num[j] != 5'b0 &&)
+            begin
+                Barrel_Num_in[j] = Barrel_Num[j] - 5'b1;
+                if(Barrel_Exist[j*15+0]==1'b0)begin
+                    Barrel_Exist_in[j*15+0]=1'b1;
+                    Barrel_X_in[j*15+0] = Player_X[j];
+                    Barrel_Y_in[j*15+0] = Player_Y[j];
+                    Barrel_HP_in[j*15+0] = 7'd32;
+                end
+                else begin
+                    if(Barrel_Exist[j*15+1]==1'b0)begin
+                        Barrel_Exist_in[j*15+1]=1'b1;
+                        Barrel_X_in[j*15+1] = Player_X[j];
+                        Barrel_Y_in[j*15+1] = Player_Y[j];
+                        Barrel_HP_in[j*15+1] = 7'd32;                   
+                    end
+                    else begin
+                        if(Barrel_Exist[j*15+2]==1'b0)begin
+                            Barrel_Exist_in[j*15+2]=1'b1;
+                            Barrel_X_in[j*15+2] = Player_X[j];
+                            Barrel_Y_in[j*15+2] = Player_Y[j];
+                            Barrel_HP_in[j*15+2] = 7'd32;                          
+                        end
+                        else begin
+                            if(Barrel_Exist[j*15+3]==1'b0)begin
+                                Barrel_Exist_in[j*15+3]=1'b1;
+                                Barrel_X_in[j*15+3] = Player_X[j];
+                                Barrel_Y_in[j*15+3] = Player_Y[j];
+                                Barrel_HP_in[j*15+3] = 7'd32;
+                            end
+                            else begin
+                                if(Barrel_Exist[j*15+4]==1'b0)begin
+                                    Barrel_Exist_in[j*15+4]=1'b1;
+                                    Barrel_X_in[j*15+4] = Player_X[j];
+                                    Barrel_Y_in[j*15+4] = Player_Y[j];
+                                    Barrel_HP_in[j*15+4] = 7'd32;
+                                end
+                                else begin
+                                    if(Barrel_Exist[j*15+5]==1'b0)begin
+                                        Barrel_Exist_in[j*15+5]=1'b1;
+                                        Barrel_X_in[j*15+5] = Player_X[j];
+                                        Barrel_Y_in[j*15+5] = Player_Y[j];
+                                        Barrel_HP_in[j*15+5] = 7'd32;                   
+                                    end
+                                    else begin
+                                        if(Barrel_Exist[j*15+6]==1'b0)begin
+                                            Barrel_Exist_in[j*15+6]=1'b1;
+                                            Barrel_X_in[j*15+6] = Player_X[j];
+                                            Barrel_Y_in[j*15+6] = Player_Y[j];
+                                            Barrel_HP_in[j*15+6] = 7'd32;                          
+                                        end
+                                        else begin
+                                            if(Barrel_Exist[j*15+7]==1'b0)begin
+                                                Barrel_Exist_in[j*15+7]=1'b1;
+                                                Barrel_X_in[j*15+7] = Player_X[j];
+                                                Barrel_Y_in[j*15+7] = Player_Y[j];
+                                                Barrel_HP_in[j*15+7] = 7'd32;
+                                            end
+                                            else begin
+                                                if(Barrel_Exist[j*15+8]==1'b0)begin
+                                                    Barrel_Exist_in[j*15+8]=1'b1;
+                                                    Barrel_X_in[j*15+8] = Player_X[j];
+                                                    Barrel_Y_in[j*15+8] = Player_Y[j];
+                                                    Barrel_HP_in[j*15+8] = 7'd32;
+                                                end
+                                                else begin
+                                                    if(Barrel_Exist[j*15+9]==1'b0)begin
+                                                        Barrel_Exist_in[j*15+9]=1'b1;
+                                                        Barrel_X_in[j*15+9] = Player_X[j];
+                                                        Barrel_Y_in[j*15+9] = Player_Y[j];
+                                                        Barrel_HP_in[j*15+9] = 7'd32;                   
+                                                    end
+                                                    else begin
+                                                        if(Barrel_Exist[j*15+10]==1'b0)begin
+                                                            Barrel_Exist_in[j*15+10]=1'b1;
+                                                            Barrel_X_in[j*15+10] = Player_X[j];
+                                                            Barrel_Y_in[j*15+10] = Player_Y[j];
+                                                            Barrel_HP_in[j*15+10] = 7'd32;                          
+                                                        end
+                                                        else begin
+                                                            if(Barrel_Exist[j*15+11]==1'b0)begin
+                                                                Barrel_Exist_in[j*15+11]=1'b1;
+                                                                Barrel_X_in[j*15+11] = Player_X[j];
+                                                                Barrel_Y_in[j*15+11] = Player_Y[j];
+                                                                Barrel_HP_in[j*15+11] = 7'd32;
+                                                            end
+                                                            else begin
+                                                                if(Barrel_Exist[j*15+12]==1'b0)begin
+                                                                    Barrel_Exist_in[j*15+12]=1'b1;
+                                                                    Barrel_X_in[j*15+12] = Player_X[j];
+                                                                    Barrel_Y_in[j*15+12] = Player_Y[j];
+                                                                    Barrel_HP_in[j*15+12] = 7'd32;
+                                                                end
+                                                                else begin
+                                                                    if(Barrel_Exist[j*15+13]==1'b0)begin
+                                                                        Barrel_Exist_in[j*15+13]=1'b1;
+                                                                        Barrel_X_in[j*15+13] = Player_X[j];
+                                                                        Barrel_Y_in[j*15+13] = Player_Y[j];
+                                                                        Barrel_HP_in[j*15+13] = 7'd32;                   
+                                                                    end
+                                                                    else begin
+                                                                        if(Barrel_Exist[j*15+14]==1'b0)begin
+                                                                            Barrel_Exist_in[j*15+14]=1'b1;
+                                                                            Barrel_X_in[j*15+14] = Player_X[j];
+                                                                            Barrel_Y_in[j*15+14] = Player_Y[j];
+                                                                            Barrel_HP_in[j*15+14] = 7'd32;                          
+                                                                        end
+                                                                        else begin
+                                                                                Barrel_Num_in[j] = Barrel_Num[j];
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    endgenerate
+endmodule

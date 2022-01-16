@@ -1,0 +1,179 @@
+module key_controller(
+    input logic        Clk, Reset,
+    input logic [7:0]  keycode,
+    input logic        press, // 1: key pressed, 0: key released
+    output logic [4:0] player_0, // {1'change weapon, 1'fire, 1' is_move, 2'move_direction}
+                       player_1,
+    output logic [1:0] CONTROL // for both, 1: work 0: not work 
+    // output logic       confirm // "enter" pressed
+);
+
+    // player1: w: 1D, s: 1B, a: 1C, d: 23, q:15, space:29
+    // player2: up: 75, down: 72, left: 6B, right: 74, 1:69, 5:73
+    // ENTER: 5A  TAB: 0D
+
+logic [2:0] player_1_move, player_2_move;
+logic player_1_fire, player_2_fire;
+logic player_1_weapon, player_2_weapon; //1 for change and 0 for not change.
+
+logic [2:0] player_1_move_in, player_2_move_in;
+logic player_1_fire_in, player_2_fire_in;
+logic player_1_weapon_in, player_2_weapon_in;
+
+logic ENTER, TAB;
+
+always_ff @(posedge Clk) begin
+    player_1_move <= player_1_move_in;
+    player_2_move <= player_2_move_in;
+    player_1_fire <= player_1_fire_in;
+    player_2_fire <= player_2_fire_in;
+    player_1_weapon <= player_1_weapon_in;
+    player_2_weapon <= player_2_weapon_in;
+end
+
+always_comb begin
+    player_1_weapon_in = player_1_weapon;
+    player_2_weapon_in = player_2_weapon;
+    player_1_fire_in = player_1_fire;
+    player_1_move_in = player_1_move;
+    player_2_fire_in = player_2_fire;
+    player_2_move_in = player_2_move_in;
+    ENTER = 1'b0;
+    TAB = 1'b0;
+    unique case (keycode)
+    //change weapons
+        8'h15: //q
+        begin
+            if (press) 
+					player_1_weapon_in = 1'b1;
+            else 
+					player_1_weapon_in = 1'b0;
+        end
+        8'h69: //1
+        begin
+            if (press)  
+					player_2_weapon_in = 1'b1;
+            else  
+					player_2_weapon_in = 1'b0;
+        end
+    //move & shot
+        8'h1d: // w
+        begin
+            if (press) 
+					player_1_move_in = 3'b100;
+            else
+            begin
+                if (player_1_move == 3'b100) 
+						player_1_move_in = 3'b000;
+            end
+        end
+        8'h1b: // s
+        begin
+            if (press)
+                player_1_move_in = 3'b110;
+            else
+            begin
+                if (player_1_move == 3'b110) 
+						player_1_move_in = 3'b000;
+            end
+        end
+        8'h1c: // a
+        begin
+            if (press)
+                player_1_move_in = 3'b101;
+            else
+            begin
+                if (player_1_move == 3'b101) 
+						player_1_move_in = 3'b000;
+            end
+        end
+        8'h23: // d
+        begin
+            if (press)
+                player_1_move_in = 3'b111;
+            else
+            begin
+                if (player_1_move == 3'b111)  
+						player_1_move_in = 3'b000;
+            end
+        end
+        8'h29: // space
+        begin
+            if (press) 
+					player_1_fire_in = 1'b1;
+            else 
+					player_1_fire_in = 1'b0;
+        end
+        8'h75: // up
+        begin
+            if (press) 
+					player_2_move_in = 3'b100;
+            else
+            begin
+                if (player_2_move_in == 3'b100) 
+						player_2_move_in = 3'b000;
+            end
+        end
+        8'h72: // down
+        begin
+            if (press) 
+					player_2_move_in = 3'b110;
+            else
+            begin
+                if (player_2_move_in == 3'b110) 
+						player_2_move_in = 3'b000;
+            end
+        end
+        8'h6b: // left
+        begin
+            if (press) 
+					player_2_move_in = 3'b101;
+            else
+            begin
+                if (player_2_move_in == 3'b101) 
+						player_2_move_in = 3'b000;
+            end
+        end
+        8'h74: // right
+        begin
+            if (press) 
+					player_2_move_in = 3'b111;
+            else
+            begin
+                if (player_2_move_in == 3'b111) 
+						player_2_move_in = 3'b000;
+            end
+        end
+        8'h73: // 5(numpad)
+        begin
+            if (press) 
+					player_2_fire_in = 1'b1;
+            else 
+					player_2_fire_in = 1'b0;
+        end
+    //interface control  ENTER: 5A  TAB: 0D
+        8'h5a: //ENTER
+        begin
+            if(press) 
+					ENTER = 1'b1;
+            else 
+					ENTER = 1'b0;
+        end
+        8'h0d: //TAB
+        begin
+            if(press) 
+					TAB = 1'b1;
+            else 
+					TAB = 1'b0;
+        end
+        default:    ;
+
+		
+
+    endcase
+end
+
+assign CONTROL = {TAB, ENTER};
+assign player_0 = {player_1_weapon, player_1_fire, player_1_move};
+assign player_1 = {player_2_weapon, player_2_fire, player_2_move};
+endmodule

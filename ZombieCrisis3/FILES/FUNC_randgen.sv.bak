@@ -1,0 +1,24 @@
+
+//Generate a 8_bit Rand_num!
+module RANGEN(
+    input logic Clk,
+    input logic Start,
+
+    output logic [7:0] Rand_num
+);
+
+    always_ff @(posedge Clk) begin
+
+        if(Start)
+        begin
+            for(i=1;i<8;i=i+1)
+            begin
+            Ran_num[i]<= Ran_num[i-1];
+            end
+            Ran_num[0]<= Ran_num[1]^(Ran_num[2]^(Ran_num[3]^Ran_num[7]));
+        end
+        else 
+            Ran_num<=8'b0;
+    end
+
+endmodule

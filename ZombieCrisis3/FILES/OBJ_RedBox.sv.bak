@@ -1,0 +1,84 @@
+
+module RedBox(
+    //System Signal
+    input logic Clk, Start,
+    //Control Signal
+    output logic [9:0] RedBox_Exist,
+    output logic [9:0] RedBox_X[10],
+    output logic [9:0] RedBox_Y[10],
+    output logic       Replenish,
+    //Interaction
+    //Devil Information
+    input logic Die[10],
+    input logic [9:0] Devil_X[10],
+    input logic [9:0] Devil_Y[10],
+    //Player_Information
+    input logic [9:0] Player_Y[2],
+    input logic [9:0] Player_X[2]
+
+);
+
+    logic [9:0] RedBox_Exist_in;
+	logic [9:0] RedBox_X_in[10];
+    logic [9:0] RedBox_Y_in[10];
+    logic   Replenish_in;
+    int DistX[2][10], DistY[2][10];
+
+    //Detect rising edge of frame_clk
+    logic frame_clk_delayed, frame_clk_rising_edge;
+    always_ff @ (posedge Clk) begin
+        frame_clk_delayed <= frame_clk;
+        frame_clk_rising_edge <= (frame_clk == 1'b1) && (frame_clk_delayed == 1'b0);
+    end 
+
+    always_ff @(posedge Clk)begin
+        if(Start)
+        begin
+            RedBox_Exist <= RedBox_Exist_in;            
+            RedBox_X <= RedBox_X_in;
+            RedBox_Y <= RedBox_Y_in; 
+            if(frame_clk_rising_edge)
+                Replenish <= 1'b0;
+            else  
+                Replenish <= Replenish_in;
+        end
+        else begin
+            RedBox_Exist <= 10'b0;
+            Replenish <= 1'b0;
+        end 
+    end
+    
+
+    always_comb begin
+        Replenish_in = Replenish;
+        for(int i=0; i<10; i=i+1)
+        begin
+            RedBox_X_in[i] = RedBox_X[i];
+            RedBox_Y_in[i] = RedBox_Y[i];
+            RedBox_Exist_in[i] = RedBox_Exist[i];
+            DistX[0][i] = Player_X[0] - RedBox_X[i];
+            DistX[1][i] = Player_X[1] - RedBox_X[i];
+            DistY[0][i] = Player_Y[0] - RedBox_Y[i];
+            DistY[1][i] = Player_Y[1] - RedBox_Y[i];
+
+            if(RedBox_Exist[i] == 1'b1)
+            begin
+                if(DistX[0][i]*DistX[0][i] + DistY[0][i]*DistY[0][i] <= 36
+                  || DistX[1][i]*DistX[1][i] + DistY[1][i]*DistY[1][i] <= 36)
+                begin
+                    RedBox_Exist_in[i] = 1'b0;
+                    Replenish = 1'b1;
+                end
+            end
+            else begin
+                if( Die[i] == 1'b1 )
+                begin
+                    RedBox_Exist_in[i] = 1'b1;
+                    RedBox_X_in[i] = Devil_X[i];
+                    RedBox_Y_in[i] = Devil_Y[i];
+                end
+            end
+        end
+    end
+
+endmodule

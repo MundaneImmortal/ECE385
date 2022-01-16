@@ -1,0 +1,23 @@
+
+State Machine - |lab8|frame_drawer:frame_drawer_instance|State
+Name State.Idle State.Boom_Render State.Blood_Render State.Shot_Render State.Fire_Render State.Barrel_Render State.RedBox_Render State.Devil_Render State.Zombie_Render State.Player_Render State.Wait_Judgement State.Background State.Preparation 
+State.Preparation 0 0 0 0 0 0 0 0 0 0 0 0 0 
+State.Background 0 0 0 0 0 0 0 0 0 0 0 1 1 
+State.Wait_Judgement 0 0 0 0 0 0 0 0 0 0 1 0 1 
+State.Player_Render 0 0 0 0 0 0 0 0 0 1 0 0 1 
+State.Zombie_Render 0 0 0 0 0 0 0 0 1 0 0 0 1 
+State.Devil_Render 0 0 0 0 0 0 0 1 0 0 0 0 1 
+State.RedBox_Render 0 0 0 0 0 0 1 0 0 0 0 0 1 
+State.Barrel_Render 0 0 0 0 0 1 0 0 0 0 0 0 1 
+State.Fire_Render 0 0 0 0 1 0 0 0 0 0 0 0 1 
+State.Shot_Render 0 0 0 1 0 0 0 0 0 0 0 0 1 
+State.Blood_Render 0 0 1 0 0 0 0 0 0 0 0 0 1 
+State.Boom_Render 0 1 0 0 0 0 0 0 0 0 0 0 1 
+State.Idle 1 0 0 0 0 0 0 0 0 0 0 0 1 
+
+State Machine - |lab8|TimeFlow:TimeFlow|State
+Name State.Generating State.Interval State.Waiting State.Gameover 
+State.Gameover 0 0 0 0 
+State.Waiting 0 0 1 1 
+State.Interval 0 1 0 1 
+State.Generating 1 0 0 1 

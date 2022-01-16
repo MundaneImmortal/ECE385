@@ -1,0 +1,197 @@
+module player(
+    input logic         Clk, Reset,
+    input logic         frame_clk,
+    input logic [4:0]   Player_Control,
+    input logic         Id,
+    input logic [1:0]  Player_Direction_I[2], // 0: up, 1: left, 2: down, 3: right
+    input logic [9:0]  Player_X_I[2],
+                        Player_Y_I[2],
+    input logic        Player_State_I[2], // movement state
+    input logic [6:0]  Player_HP_I[2],
+    input logic [1:0]  Weapon_I[2],
+    input logic [1:0]  Ready_I[2],
+    // Output property of a Player according to ID
+    output logic [1:0]  Player_Direction[2], // 0: up, 1: left, 2: down, 3: right
+    output logic [9:0]  Player_X[2],
+                        Player_Y[2],
+    output logic        Player_State[2], // movement state
+    output logic [6:0]  Player_HP[2],
+    output logic [1:0]  Weapon[2],
+
+    output logic        Ready[2] // ready = 1, when all judgement completed
+
+);
+    parameter [9:0] Player_X_Min = 10'd0;       // Leftmost point on the X axis
+    parameter [9:0] Player_X_Max = 10'd608;     // Rightmost point on the X axis
+    parameter [9:0] Player_Y_Min = 10'd0;       // Topmost point on the Y axis
+    parameter [9:0] Player_Y_Max = 10'd448;     // Bottommost point on the Y axis
+    parameter [9:0] Player_X_Step = 10'd1;      // Step size on the X axis
+    parameter [9:0] Player_Y_Step = 10'd1;      // Step size on the Y axis
+    parameter [9:0] Player_Size = 10'd32;       // Player size
+
+    // Detect rising edge of frame_clk
+    logic frame_clk_delayed, frame_clk_rising_edge;
+    always_ff @ (posedge Clk) begin
+        frame_clk_delayed <= frame_clk;
+        frame_clk_rising_edge <= (frame_clk == 1'b1) && (frame_clk_delayed == 1'b0);
+    end
+
+    logic Ready_in;
+    logic [1:0] Player_Direction_in;
+    logic [9:0] Player_X_in, Player_Y_in;
+    logic Player_State_in;
+    logic [6:0] Player_HP_in;
+    logic [1:0] Weapon_in;
+
+    logic [9:0] X_Motion, Y_Motion;
+    logic Turn_Direction;
+    // logic Collision_Select;
+    // logic Collision_Select_in;
+
+    always_ff @(posedge Clk) begin
+        if(Reset)
+        begin
+            Player_Direction[Id] <= 2'b00;
+            Ready[Id] <= 1'b0;
+            Player_HP[Id] <= 7'd128;
+            Player_State[Id] <= 1'b0;
+            Weapon[Id] <= 2'b00;
+            Collision_Select[Id] <= 1'b0;
+            case(Id)
+                1'b0:
+                begin
+                    Player_X[Id] <= 10'd200;
+                    Player_Y[Id] <= 10'd198;
+                end
+                1'b1:
+                begin
+                    Player_X[Id] <= 10'd418;
+                    Player_Y[Id] <= 10'd198;
+                end
+        end
+        else begin
+            Ready[Id] <= Ready_in;
+            Player_X[Id] <= Player_X_in;
+            Player_Y[Id] <= Player_Y_in;
+            Player_Direction[Id] <= Player_Direction_in;
+            Player_HP[Id] <= Player_HP_in;
+            Player_State[Id] <= Player_State_in;
+            Weapon[Id] <= Weapon_in;
+            //Collision_Select <= Collision_Select_in;
+            //Turn_Direction?
+        end
+    end
+
+    always_comb begin
+        Ready_in = 1'b1;
+        Player_X_in = Player_X_I[Id];
+        Player_Y_in = Player_Y_I[Id];
+        Player_Direction_in = Player_Direction_I[Id];
+        Player_HP_in = Player_HP_I[Id];
+        Player_State_in = Player_State_I[Id];
+        Weapon_in = Weapon_I[Id];
+        X_Motion = 10'b0;
+        Y_Motion = 10'b0;
+        Turn_Direction = 1'b0;
+
+        //Collision_Select_in = ~Collision_Select;
+        //Reset Ready
+        if (frame_clk_rising_edge && Ready_I[Id])
+        begin
+            Ready_in = 1'b0;
+        end
+        //update the player
+        if(~Ready_in)
+        begin
+            //Weapon selection
+            if(Player_Control[4] == 1'b1)
+            begin  
+                if(Weapon[Id] == 2'b11)
+                    Weapon_in = 2'b00;
+                else 
+                    Weapon_in = Weapon[Id] + 2'b01;
+            end
+            //Movement
+            case(Player_Control[2:0])
+                3'b101: // left
+                begin
+                    if(Player_Direction == 2'b01)
+                    begin
+                        X_Motion = (~(Player_X_Step)+1'b1);
+                        Y_Motion = 10'd0;
+                        Player_State_in = ~Player_State[Id];
+                    end
+                    else begin
+                        Turn_Direction = 1'b1;
+                        Player_Direction_in = 2'b01;// Y!
+                    end
+                end
+                3'b111:// right
+                begin
+                    if(Player_Direction == 2'b11)
+                    begin
+                        X_Motion = Player_X_Step;
+                        Y_Motion = 10'd0;
+                        Player_State_in = ~Player_State[Id];
+                    end
+                    else begin
+                        Turn_Direction = 1'b1;
+                        Player_Direction_in = 2'b11;
+                    end
+                end
+                3'b110://down
+                begin
+                    if(Player_Direction == 2'b10)
+                    begin
+                        X_Motion = 10'd0;
+                        Y_Motion = Player_Y_Step;
+                        Player_State_in = ~Player_State[Id];
+                    end
+                    else begin
+                        Turn_Direction = 1'b1;
+                        Player_Direction_in = 2'b10;
+                    end
+                end
+                3'b100://up
+                begin
+                    if(Player_Direction == 2'b00)
+                    begin
+                        X_Motion = 10'd0;
+                        Y_Motion = (~(Player_Y_Step) + 1'b1);
+                        Player_State_in = ~Player_State[Id];
+                    end
+                    else begin
+                        Turn_Direction = 1'b1;
+                        Player_Direction_in = 2'b00;
+                    end
+                end
+            endcase
+            if(~Turn_Direction)
+            begin
+                //Move
+                Player_X_in = Player_X[Id] + X_Motion;
+                Player_Y_in = Player_Y[Id] + Y_Motion;
+                //Boundary check
+                if( Player_X_in + Player_Size > Player_X_Max || Player_X_in > Player_X_Max ) 
+                    Player_X_in = Player_X[Id];
+                if( Player_Y_in + Player_Size > Player_Y_Max || Player_Y_in > Player_Y_Max )  
+                    Player_Y_in = Player_Y[Id];
+                //check the collision map
+                // Collision_Map[Collision_Select][(640*Player_Y_in + Player_X_in + 31):(640*Player_Y_in + Player_X_in)] & 32'hffffffff;
+                // genvar i; 
+                // generate
+                // for(i=0;i<Player_Size;i=i+1)
+                // begin:xjz
+                //     assign bin[i]=^gray[SIZE-1:i];
+                // end
+                // endgenerate
+                //draw the new collision map
+                //
+                //Collision_Map[~Collision_Select]
+
+            end
+        end
+
+    end
+
+endmodule
